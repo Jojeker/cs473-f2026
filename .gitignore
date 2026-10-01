@@ -1,0 +1,31 @@
+# ---- Software build output (virtualprototype/programs) ----
+# The makefiles put everything into build-<debug|release>-<target>/
+build-debug*/
+build-release*/
+
+# Compiler / linker intermediates and images
+*.o
+*.d
+*.elf
+*.map
+*.lst
+a.out
+
+# Stray test binary left by the helloWorld makefile
+virtualprototype/programs/helloWorld/test
+
+# ---- Simulation / synthesis artifacts ----
+work-obj*.cf
+*.ghw
+*.vcd
+*.fst
+obj_dir/
+*.jou
+*.log
+
+# ---- Editor / OS noise ----
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
