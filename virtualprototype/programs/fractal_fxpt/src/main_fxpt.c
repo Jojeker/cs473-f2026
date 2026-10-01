@@ -4,27 +4,34 @@
 #include "cache.h"
 #include <stddef.h>
 #include <stdio.h>
+#include "fxpt.c"
 
 // Constants describing the output device
 const int SCREEN_WIDTH = 512;   //!< screen width
 const int SCREEN_HEIGHT = 512;  //!< screen height
 
 // Constants describing the initial view port on the fractal function
-const float FRAC_WIDTH = 3.0; //!< default fractal width (3.0 in Q4.28)
-const float CX_0 = -2.0;      //!< default start x-coordinate (-2.0 in Q4.28)
-const float CY_0 = -1.5;      //!< default start y-coordinate (-1.5 in Q4.28)
+const float float_FRAC_WIDTH = 3.0; //!< default fractal width (3.0 in Q8.24
+const float float_CX_0 = -2.0;      //!< default start x-coordinate (-2.0 in Q8.24
+const float float_CY_0 = -1.5;      //!< default start y-coordinate (-1.5 in Q8.24
 const uint16_t N_MAX = 64;    //!< maximum number of iterations
 
 int main() {
+
+   fxpt_8_24 FRAC_WIDTH = float_to_fxpt(float_FRAC_WIDTH); //!< default fractal width (3.0 in Q8.24
+   fxpt_8_24 CX_0 = float_to_fxpt(CX_0);
+   fxpt_8_24 CY_0 = float_to_fxpt(CY_0);
+
    volatile unsigned int *vga = (unsigned int *) 0x50000020;
    volatile unsigned int reg, hi;
    rgb565 frameBuffer[SCREEN_WIDTH*SCREEN_HEIGHT];
-   float delta = FRAC_WIDTH / SCREEN_WIDTH;
+   fxpt_8_24 delta = float_FRAC_WIDTH / (SCREEN_WIDTH << 24);
    int i;
    vga_clear();
    printf("Starting drawing a fractal\n");
 #ifdef __OR1300__   
    /* enable the caches */
+   // optimize here later.
    icache_write_cfg( CACHE_DIRECT_MAPPED | CACHE_SIZE_8K | CACHE_REPLACE_FIFO );
    dcache_write_cfg( CACHE_FOUR_WAY | CACHE_SIZE_8K | CACHE_REPLACE_LRU | CACHE_WRITE_BACK );
    icache_enable(1);
