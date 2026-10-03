@@ -22,7 +22,7 @@ uint16_t calc_mandelbrot_point_soft(fxpt cx, fxpt cy, uint16_t n_max) {
     x = xx - yy + cx;
     y = two_xy + cy;
     ++n;
-  } while (((xx + yy) < int_to_fxpt(4)) && (n < n_max));
+  } while (((xx + yy) < (4 << FXPT_FRAC)) && (n < n_max));
   return n;
 }
 
