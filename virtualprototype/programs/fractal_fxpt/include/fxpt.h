@@ -2,7 +2,7 @@
 #define FXPT_H
 
 #define FXPT_FRAC 24 // In Q(32-FXPT_FRAC).FXPT_FRAC
-#define FX(x) ((fxpt)((x) * (1 << FXPT_FRAC))) // Converts float x into fxpt
+#define FX(x) ((fxpt)((x) * (1 << FXPT_FRAC))) // Convert float x into fxpt FX(x)
 
 #include <stdint.h>
 //! \brief Signed Q8.24 fixed-point type
