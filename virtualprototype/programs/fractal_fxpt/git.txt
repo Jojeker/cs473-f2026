@@ -1,0 +1,34 @@
+lsuzuki@tsf-428-wpa-2-207 fractal_fxpt % git status
+On branch lab1
+Your branch is up to date with 'origin/lab1'.
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   include/fxpt.h
+	modified:   src/fractal_fxpt.c
+	deleted:    src/fxpt.c
+	modified:   src/main_fxpt.c
+
+no changes added to commit (use "git add" and/or "git commit -a")
+
+lsuzuki@tsf-428-wpa-2-207 fractal_fxpt % git add -A
+lsuzuki@tsf-428-wpa-2-207 fractal_fxpt % git commit 
+[lab1 4d0be83] fixed point
+ Committer: Lisa Suzuki <lsuzuki@tsf-428-wpa-4-073.epfl.ch>
+Your name and email address were configured automatically based
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly. Run the
+following command and follow the instructions in your editor to edit
+your configuration file:
+
+    git config --global --edit
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 4 files changed, 25 insertions(+), 18 deletions(-)
+ delete mode 100644 virtualprototype/programs/fractal_fxpt/src/fxpt.c
+
+lsuzuki@tsf-428-wpa-2-207 programs % git push origin lab1

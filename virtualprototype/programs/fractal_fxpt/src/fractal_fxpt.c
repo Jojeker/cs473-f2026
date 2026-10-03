@@ -9,11 +9,11 @@
 //! \param  n_max maximum number of iterations
 //! \return       number of performed iterations at coordinate (cx, cy)
 
-uint16_t calc_mandelbrot_point_soft(fxpt_8_24 cx, fxpt_8_24 cy, uint16_t n_max) {
-  fxpt_8_24 x = cx;
-  fxpt_8_24 y = cy;
+uint16_t calc_mandelbrot_point_soft(fxpt cx, fxpt cy, uint16_t n_max) {
+  fxpt x = cx;
+  fxpt y = cy;
   uint16_t n = 0;
-  fxpt_8_24 xx, yy, two_xy;
+  fxpt xx, yy, two_xy;
   do {
     xx = mul(x, x);
     yy = mul(y, y);
@@ -22,7 +22,7 @@ uint16_t calc_mandelbrot_point_soft(fxpt_8_24 cx, fxpt_8_24 cy, uint16_t n_max) 
     x = xx - yy + cx;
     y = two_xy + cy;
     ++n;
-  } while (((xx + yy) < (4 << 24)) && (n < n_max));
+  } while (((xx + yy) < int_to_fxpt(4)) && (n < n_max));
   return n;
 }
 
@@ -102,12 +102,12 @@ rgb565 iter_to_colour1(uint16_t iter, uint16_t n_max) {
 //! \param  n_max  maximum number of iterations
 void draw_fractal(rgb565 *fbuf, int width, int height,
                   calc_frac_point_p cfp_p, iter_to_colour_p i2c_p,
-                  fxpt_8_24 cx_0, fxpt_8_24 cy_0, fxpt_8_24 delta, uint16_t n_max) {
+                  fxpt cx_0, fxpt cy_0, fxpt delta, uint16_t n_max) {
   rgb565 *pixel = fbuf;
-  fxpt_8_24 cy = cy_0;
+  fxpt cy = cy_0;
   printf("start iteration.\n");//debug
   for (int k = 0; k < height; ++k) {
-    fxpt_8_24 cx = cx_0;
+    fxpt cx = cx_0;
     for(int i = 0; i < width; ++i) {
       uint16_t n_iter = (*cfp_p)(cx, cy, n_max);
       rgb565 colour = (*i2c_p)(n_iter, n_max);
