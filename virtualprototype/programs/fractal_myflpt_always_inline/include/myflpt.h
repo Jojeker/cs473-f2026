@@ -7,7 +7,7 @@
 typedef uint32_t (myflpt);
 
 // Convert an IEEE 754 float to myflpt
-static inline myflpt float_to_myflpt(float f) {
+static inline __attribute__((always_inline)) myflpt float_to_myflpt(float f) {
 
     union { float f; uint32_t u; } conv = { .f = f };
     uint32_t bits = conv.u;
@@ -26,7 +26,7 @@ static inline myflpt float_to_myflpt(float f) {
     return (sign << 31) | (m << 8) | e;
 }
 
-static inline void order(myflpt *a, myflpt *b) {
+static inline __attribute__((always_inline)) void order(myflpt *a, myflpt *b) {
     uint32_t exp_a = (*a << 24) >> 24;
     uint32_t exp_b = (*b << 24) >> 24;
 
@@ -40,7 +40,7 @@ static inline void order(myflpt *a, myflpt *b) {
     }
 }
 
-static inline myflpt add(myflpt a, myflpt b) {
+static inline __attribute__((always_inline)) myflpt add(myflpt a, myflpt b) {
 
     if (a == 0) return b;
     if (b == 0) return a;
@@ -88,14 +88,14 @@ static inline myflpt add(myflpt a, myflpt b) {
     return (s << 31) | (m << 8) | e;
 }
 
-static inline myflpt sub(myflpt a, myflpt b) {
+static inline __attribute__((always_inline)) myflpt sub(myflpt a, myflpt b) {
     if (b == 0) return a;
 
     // a - b = a + (-b)
     return add(a, b ^ 0x80000000);
 }
 
-static inline myflpt mul(myflpt a, myflpt b) {
+static inline __attribute__((always_inline)) myflpt mul(myflpt a, myflpt b) {
 
     if (a == 0 || b == 0) return 0;                 // If a or b == 0, then return zero.
 
@@ -133,7 +133,7 @@ static inline myflpt mul(myflpt a, myflpt b) {
 //! \brief  Signed comparison: returns non-zero if a < b.
 //! \note   Zero is always encoded as +0 (0x00000000) by float_to_myflpt(),
 //!         add() and mul(), so a negative zero can never reach the sign test.
-static inline int is_smaller(myflpt a, myflpt b) {
+static inline __attribute__((always_inline)) int is_smaller(myflpt a, myflpt b) {
 
     uint32_t sign_a = (a >> 31);
     uint32_t sign_b = (b >> 31);

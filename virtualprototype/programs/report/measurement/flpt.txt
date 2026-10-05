@@ -1,0 +1,29 @@
+Run 1:
+run time                         [08] : 00:01:40.523
+run time                         [08] : 5971011787 cycles
+cpu stall cycles                 [00] : 91955800 cycles
+bus idle cycles                  [01] : 3579236029 cycles
+i-cache misses                   [02] : 24277779 cycles
+executed instructions            [03] : 3292407183 cycles
+d-cache misses                   [04] : 16400 cycles
+i-cache miss penalty             [05] : 1647270074 cycles
+
+Run 2:
+run time                         [08] : 00:01:40.524
+run time                         [08] : 5971036224 cycles
+cpu stall cycles                 [00] : 91960960 cycles
+bus idle cycles                  [01] : 3579260633 cycles
+i-cache misses                   [02] : 24277779 cycles
+executed instructions            [03] : 3292407183 cycles
+d-cache misses                   [04] : 16400 cycles
+i-cache miss penalty             [05] : 1647278253 cycles
+
+Run 3:
+run time                         [08] : 00:01:40.525
+run time                         [08] : 5971086284 cycles
+cpu stall cycles                 [00] : 91958942 cycles
+bus idle cycles                  [01] : 3579310414 cycles
+i-cache misses                   [02] : 24277779 cycles
+executed instructions            [03] : 3292407183 cycles
+d-cache misses                   [04] : 16400 cycles
+i-cache miss penalty             [05] : 1647398742 cycles
