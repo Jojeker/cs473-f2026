@@ -1,28 +1,34 @@
 #include "fractal_myflpt.h"
 #include <swap.h>
+#include <stdio.h>
+
+#define MYFLPT_FOUR 0x400000FD
 
 //! \brief  Mandelbrot fractal point calculation function
 //! \param  cx    x-coordinate
 //! \param  cy    y-coordinate
 //! \param  n_max maximum number of iterations
 //! \return       number of performed iterations at coordinate (cx, cy)
-uint16_t calc_mandelbrot_point_soft(float cx, float cy, uint16_t n_max) {
-  float x = cx;
-  float y = cy;
-  uint16_t n = 0;
-  float xx, yy, two_xy;
-  do {
-    xx = x * x;
-    yy = y * y;
-    two_xy = 2 * x * y;
 
-    x = xx - yy + cx;
-    y = two_xy + cy;
+uint16_t calc_mandelbrot_point_soft(myflpt cx, myflpt cy, uint16_t n_max) {
+  myflpt x = cx;
+  myflpt y = cy;
+  uint16_t n = 0;
+  myflpt xx, yy, xy, two_xy;
+  do {
+    xx = mul(x, x);
+    yy = mul(y, y);
+    xy = mul(x, y);
+
+    if (xy == 0) two_xy = 0;
+    else two_xy = xy + 1;        // 2 * xy in myflpt
+
+    x = add(sub(xx, yy), cx);
+    y = add(two_xy, cy);
     ++n;
-  } while (((xx + yy) < 4) && (n < n_max));
+  } while (is_smaller(add(xx, yy), MYFLPT_FOUR) && (n < n_max));
   return n;
 }
-
 
 //! \brief  Map number of performed iterations to black and white
 //! \param  iter  performed number of iterations
@@ -100,17 +106,19 @@ rgb565 iter_to_colour1(uint16_t iter, uint16_t n_max) {
 //! \param  n_max  maximum number of iterations
 void draw_fractal(rgb565 *fbuf, int width, int height,
                   calc_frac_point_p cfp_p, iter_to_colour_p i2c_p,
-                  float cx_0, float cy_0, float delta, uint16_t n_max) {
+                  myflpt cx_0, myflpt cy_0, myflpt delta, uint16_t n_max) {
   rgb565 *pixel = fbuf;
-  float cy = cy_0;
+  myflpt cy = cy_0;
+  printf("start iteration.\n");//debug
   for (int k = 0; k < height; ++k) {
-    float cx = cx_0;
+    myflpt cx = cx_0;
     for(int i = 0; i < width; ++i) {
       uint16_t n_iter = (*cfp_p)(cx, cy, n_max);
       rgb565 colour = (*i2c_p)(n_iter, n_max);
       *(pixel++) = colour;
-      cx += delta;
+      cx = add(cx, delta);
     }
-    cy += delta;
+    printf("one row finished %d.\n", k);//debug
+    cy = add(cy, delta);
   }
 }
