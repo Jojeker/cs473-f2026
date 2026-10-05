@@ -1,8 +1,6 @@
 #include "fractal_fxpt.h"
 #include <swap.h>
 
-#include <stdio.h>//debug
-
 //! \brief  Mandelbrot fractal point calculation function
 //! \param  cx    x-coordinate
 //! \param  cy    y-coordinate
@@ -105,7 +103,6 @@ void draw_fractal(rgb565 *fbuf, int width, int height,
                   fxpt cx_0, fxpt cy_0, fxpt delta, uint16_t n_max) {
   rgb565 *pixel = fbuf;
   fxpt cy = cy_0;
-  printf("start iteration.\n");//debug
   for (int k = 0; k < height; ++k) {
     fxpt cx = cx_0;
     for(int i = 0; i < width; ++i) {
@@ -114,7 +111,6 @@ void draw_fractal(rgb565 *fbuf, int width, int height,
       *(pixel++) = colour;
       cx += delta;
     }
-    printf("one row finished %d.\n", k);//debug
     cy += delta;
   }
 }

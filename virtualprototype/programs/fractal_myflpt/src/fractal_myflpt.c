@@ -1,6 +1,5 @@
 #include "fractal_myflpt.h"
 #include <swap.h>
-#include <stdio.h>
 
 #define MYFLPT_FOUR 0x400000FD
 
@@ -20,8 +19,7 @@ uint16_t calc_mandelbrot_point_soft(myflpt cx, myflpt cy, uint16_t n_max) {
     yy = mul(y, y);
     xy = mul(x, y);
 
-    if (xy == 0) two_xy = 0;
-    else two_xy = xy + 1;        // 2 * xy in myflpt
+    two_xy = add(xy, xy);
 
     x = add(sub(xx, yy), cx);
     y = add(two_xy, cy);
@@ -109,7 +107,6 @@ void draw_fractal(rgb565 *fbuf, int width, int height,
                   myflpt cx_0, myflpt cy_0, myflpt delta, uint16_t n_max) {
   rgb565 *pixel = fbuf;
   myflpt cy = cy_0;
-  printf("start iteration.\n");//debug
   for (int k = 0; k < height; ++k) {
     myflpt cx = cx_0;
     for(int i = 0; i < width; ++i) {
@@ -118,7 +115,6 @@ void draw_fractal(rgb565 *fbuf, int width, int height,
       *(pixel++) = colour;
       cx = add(cx, delta);
     }
-    printf("one row finished %d.\n", k);//debug
     cy = add(cy, delta);
   }
 }

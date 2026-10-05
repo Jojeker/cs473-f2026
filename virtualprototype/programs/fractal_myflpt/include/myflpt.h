@@ -131,6 +131,12 @@ static inline myflpt mul(myflpt a, myflpt b) {
 }
 
 static inline int is_smaller(myflpt a, myflpt b) {
+
+    uint32_t sign_a = (a >> 31);
+    uint32_t sign_b = (b >> 31);
+
+    if (sign_a != sign_b) return (sign_a < sign_b);
+
     uint32_t exp_a = (a << 24) >> 24;
     uint32_t exp_b = (b << 24) >> 24;
 
