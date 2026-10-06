@@ -57,19 +57,19 @@
 \section{Introduction}
 % ===========================================================================
 
-This report documents two replacements for the reference \texttt{float} implementation
-(\texttt{fractal\_flpt}):
+This report documents the implementation of two precision data types:
 \begin{enumerate}\itemsep0pt
   \item \textbf{\texttt{fractal\_fxpt}}, a signed \Q{8}{24} fixed-point version;
-  \item \textbf{\texttt{fractal\_myflpt}}, a custom 32-bit floating-point format with its own
-        inlineable arithmetic library.
+  \item \textbf{\texttt{fractal\_myflpt}}, a custom 32-bit floating-point format with
+        inlined arithmetic.
 \end{enumerate}
+
 Both reach the same image as the reference, with $\le 0.03\,\%$ of pixels differing, while
 eliminating all calls into libgcc's soft-float library.
 
-\paragraph{Experimental setup.} Table~\ref{tab:setup} lists the configuration under which every
-figure in this report was obtained. All three programs share it exactly, so the comparisons that
-follow isolate the arithmetic representation and nothing else.
+\paragraph{Experimental setup.} 
+Table~\ref{tab:setup} reports the configuration under which we collected the figures below.
+Changes between implementations only involve changes in the number formats.
 
 \begin{table}[h]
 \centering\small
@@ -110,81 +110,81 @@ Numerical accuracy       & host-side replay against IEEE-754 \texttt{double} (Se
 \label{sec:qformat}
 
 Choosing $m$ and $f$ requires a bound on the largest intermediate value, which we derive here for
-this specific algorithm and viewport.
+this the Mandelbrot set algorithm and viewport with $c_x \in [-2,1)$ and $c_y \in [-1.5,1.5]$.
+We compute the bounds by bounding every iteration and the trivial step at initialization.
 
-Let $x_n, y_n$ be the values at the start of iteration $n$. The loop body computes
-$xx = x_n^2$, $yy = y_n^2$, updates $x$ and $y$ by the Mandelbrot recurrence, and only \emph{then} tests
-$xx + yy < 4$. Consequently iteration $n+1$ is reached only if $x_n^2 + y_n^2 < 4$. Under that
-hypothesis, and using $|c_x| \le 2$, $|c_y| \le 1.5$ for our viewport:
+\textit{Iteration Bounds}: Let $x_n, y_n$ be the values at the start of iteration $n$. 
+The loop body computes $xx = x_n^2$, $yy = y_n^2$, updates $x$ and $y$ by the Mandelbrot recurrence, and only \emph{then} tests
+$xx + yy < 4$. 
+Iteration $n+1$ is reached only if $x_n^2 + y_n^2 < 4$. Under that
+hypothesis, and using the maximum values $|c_x| \le 2$, $|c_y| \le 1.5$ for our viewport:
 \begin{align}
-  |x_{n+1}| &= |x_n^2 - y_n^2 + c_x| \;\le\; (x_n^2 + y_n^2) + |c_x| \;<\; 4 + 2 = 6, \\
+    |x_{n+1}| &= |x_n^2 - y_n^2 + c_x| \;\le\; (x_n^2 + y_n^2) + |c_x| \;<\; 4  + 2 = 6, \\
   |y_{n+1}| &= |2 x_n y_n + c_y|     \;\le\; (x_n^2 + y_n^2) + |c_y| \;<\; 4 + 1.5 = 5.5,
 \end{align}
-where the second line uses $|2xy| \le x^2 + y^2$. Hence the largest value ever written to
-\texttt{xx + yy} is bounded by
+where the second line uses $|2xy| \le x^2 + y^2$. 
+The largest value ever written to \texttt{xx + yy} is bounded by
 \begin{equation}
   x_{n+1}^2 + y_{n+1}^2 \;<\; 6^2 + 5.5^2 \;=\; 66.25 .
   \label{eq:bound}
 \end{equation}
-(The very first pass, where $x_1 = c_x$ and $y_1 = c_y$, yields at most $4 + 2.25 = 6.25$ and is
-not critical.) The format must therefore represent magnitudes up to $66.25$, so it needs
-$\lceil \log_2 66.25 \rceil = 7$ integer bits plus one sign bit. On a 32-bit integer this leaves
-exactly 24 fractional bits:
+
+\textit{First Iteration}: The first iteration where $x_1 = c_x$ and $y_1 = c_y$, yields at most $4 + 2.25 = 6.25$ and is
+not critical. The format must therefore represent magnitudes up to $66.25$, so it needs
+$\lceil \log_2 66.25 \rceil = 7$ integer bits plus one sign bit. Consequently, the integer digit can be represented by $m = 8$ bits leaving 24  fractional bits:
 \[
   \boxed{\texttt{fxpt} = \Q{8}{24}, \qquad \text{range } [-128,\,128), \qquad
   \text{resolution } 2^{-24} \approx 5.96 \times 10^{-8}.}
 \]
-\Q{8}{24} is the \emph{tightest provably safe} choice: \Q{7}{25} saturates at $64 < 66.25$ and is
-therefore not safe against bound~\eqref{eq:bound}, while \Q{4}{28}, which the comments in the
-skeleton's \texttt{main\_flpt.c} suggest, saturates at $8$ and would overflow badly. Instrumenting
-the algorithm over the whole image confirms the analysis: the largest value actually observed for
-\texttt{xx + yy} is $585\,942\,317 = 34.925$, i.e.\ $27\,\%$ of the available range, with
-\textbf{zero} overflow events in $3.87 \times 10^6$ iterations.
 
-The declaration keeps the scale factor symbolic so the format can be re-tuned in one place:
+We show empirically, that the value range is not exceeded: the largest value observed for
+\texttt{xx + yy} is $34.925$ without overflow events in $3.87 \times 10^6$ iterations.
+
+We wrap literal definitions in a C-macro (\texttt{FX()}) which is constant-folded by the compiler at compile-time. 
+The declaration keeps the scale factor configurable and is used for all fractional literals in the program:
+
 \begin{lstlisting}
 #define FXPT_FRAC 24                            // In Q(32-FXPT_FRAC).FXPT_FRAC
 #define FX(x) ((fxpt)((x) * (1 << FXPT_FRAC)))  // compile-time float -> fxpt conversion
 typedef int32_t (fxpt);
 \end{lstlisting}
-Because \texttt{FX()} is a macro applied to literal constants, the conversions of
-\texttt{CX\_0}, \texttt{CY\_0} and \texttt{FRAC\_WIDTH} are folded by the compiler and cost nothing
-at run time; no floating-point code survives in the binary.
 
 \subsection{Arithmetic operations}
 
-Addition and subtraction use the native 32-bit integer adder directly, both operands carrying the
-same scale (\texttt{x = xx - yy + cx}). Multiplication is the only operation needing care, since
-the \Q{16}{48} product does not fit in 32 bits:
+Addition and subtraction use the native 32-bit integer addition, as both operands have the 
+same scale. However, multiplication required additional consideration, since the resulting 
+\Q{16}{48} product of two \Q{8}{24} fixed-point decimals does not fit in 32 bits:
+
 \begin{lstlisting}
 static inline fxpt mul(fxpt a, fxpt b) {
     return (fxpt)(((int64_t) a * b) >> FXPT_FRAC);   // Q8.24 x Q8.24 = Q16.48 -> >>24 -> Q8.24
 }
 \end{lstlisting}
-This answers Hint~1 of the handout. What matters for our case is that the 8 discarded upper bits
-are always sign extension, which \eqref{eq:bound} proves, so the shift is lossless at the top.
-Truncation toward $-\infty$ costs at most one ulp ($2^{-24}$) per multiplication, which
-Section~\ref{sec:verif} shows to be harmless.
 
-\subsection{Limitations}
+We leverage the fact that the 8 upper bits are always sign extension.
+As the maximum absolute value is bounded by 66.25, the upper 8 bits
+are not required to represent the resulting integer digit of the multiplication.
 
-Hint~2 of the handout asks how overflow and underflow are handled, given that the fixed-point type
-offers no detection. Our answer is to make them \emph{impossible by construction} rather than to
-detect them at run time, which would cost a branch in the innermost loop:
+Shifting 24 bits rightward truncates toward $-\infty$ (as opposed to C's integer truncation) and introduces a rounding error of at most $2^{24}$.
+In Section~\ref{sec:verif}, we show that this rounding error is harmless.
+
+\subsection{Handling Over- and Underflows}
+
+We handle over- and underflows by \textit{omitting them by construction}.
+This makes detecting them at runtime obsolete, as we can prove their absence.
+
 \begin{itemize}\itemsep0pt
   \item \textbf{Overflow} is excluded by the bound~\eqref{eq:bound} together with the choice of
-        \Q{8}{24}, as derived above. The same argument covers the intermediates:
+        \Q{8}{24}, as shown above. The same argument covers the intermediates:
         $|xx|, |yy| < 36$ and $|2xy| < 66$, all within $[-128, 128)$.
-  \item \textbf{Underflow} is a graceful loss of precision, not a wrap-around: a product smaller
-        than $2^{-24}$ simply truncates to zero. Since the escape test compares against $4.0$,
-        values that underflow are numerically irrelevant to the decision. The only visible effect
-        is on pixels extremely close to the boundary of the set, quantified in
-        Section~\ref{sec:verif}.
+  \item \textbf{Underflow} represents a loss of precision, and does not wrap: a product smaller
+        than $2^{-24}$ truncates to zero by shifting 24 bits rightwards.
 \end{itemize}
-Note that this guarantee is viewport-specific. A zoom feature would shrink $\Delta c$ but leave the
+
+The above guarantee is viewport-specific. A postulated zoom feature would shrink $\Delta c$ but leave the
 bound~\eqref{eq:bound} unchanged (it depends only on the escape threshold and on
-$|c| \lesssim 2$), so \Q{8}{24} would remain safe against overflow. What fails first is
-\emph{resolution}, as discussed in Section~\ref{sec:discussion}.
+$|c| \lesssim 2$), so \Q{8}{24} would remain safe against overflow. 
+However, we later show that resolution is insufficient under this data format (cf. Section~\ref{sec:discussion}).
 
 % ===========================================================================
 \section{Custom floating-point format: \texttt{myflpt}}
@@ -192,7 +192,7 @@ $|c| \lesssim 2$), so \Q{8}{24} would remain safe against overflow. What fails f
 
 \subsection{Format definition}
 
-We adopted the layout suggested in the handout: a 32-bit word holding a sign bit, a 23-bit
+We adopt a similar design to the suggested layout: a 32-bit word holding a sign bit, a 23-bit
 magnitude and an 8-bit exponent in excess-250.
 
 \begin{center}\small
@@ -200,7 +200,7 @@ magnitude and an 8-bit exponent in excess-250.
 \begin{tabular}{|c|c|c|}
 \hline
 \textbf{bit 31} & \textbf{bits 30\,--\,8} & \textbf{bits 7\,--\,0} \\
-sign & magnitude $m$ (23 bits, leading one \emph{explicit}) & exponent $e$ (excess-250) \\
+sign & magnitude/mantissa $m$ (23 bits, leading one \emph{explicit}) & exponent $e$ (excess-250) \\
 \hline
 \end{tabular}
 \end{center}
@@ -210,37 +210,36 @@ A non-zero value is interpreted as
   v \;=\; (-1)^{s} \cdot \frac{m}{2^{23}} \cdot 2^{\,e-250},
   \qquad \tfrac{1}{2} \le \frac{m}{2^{23}} < 1 ,
 \end{equation}
-so the magnitude is normalised to the interval $[0.5, 1)$ and bit~30 is always set for a non-zero
-number. The all-zero word \texttt{0x00000000} is the unique encoding of zero. Representable
-magnitudes span $2^{-251} \approx 2.8\times10^{-76}$ up to just below $2^{5} = 32$.
+so the mantissa is normalised to the interval $[0, 1)$. 
+The all-zero word \texttt{0x00000000} is the unique encoding of zero. Representable
+magnitudes span $2^{-250}$ up to just below $2^{7} = 128$.
 
-\paragraph{Design rationale.}
+This choice is more suited for representing the Mandelbrot set than IEEE 754 for the following reasons:
 \begin{itemize}\itemsep1pt
-  \item \textbf{Exponent in the least significant bits, magnitude above it.} This ordering makes
-        two operations cheap. First, an unsigned comparison of two same-sign words is already a
+  \item \textbf{Exponent in the least significant bits, mantissa above it.} This ordering makes
+      two operations cheap. \textit{First}, an unsigned comparison of two same-sign words is already a
         correct magnitude comparison, so \texttt{order()} and \texttt{is\_smaller()} reduce to
-        integer compares. Second, doubling a value is a single increment of the exponent field.
-  \item \textbf{Excess-250 rather than excess-127.} The algorithm only ever handles magnitudes
+        integer compares. \textit{Second}, doubling a value is a single increment of the exponent field.
+  \item \textbf{Excess-250 instead of excess-127.} The algorithm only ever handles magnitudes
         below $66.25$, and squaring drives values toward zero. Biasing the exponent so that the
-        representable range is $[2^{-251}, 2^{5})$ spends essentially all of the dynamic range
-        \emph{below} 1.0, where this algorithm needs it, instead of wasting half of it on values
-        above $32$ that the escape condition forbids. The bias also keeps the stored exponent
-        unsigned, so no sign extension is needed when unpacking.
-  \item \textbf{Explicit leading one instead of IEEE's hidden bit.} This removes the
-        insert/extract logic from every pack and unpack. The price is exactly one bit of
-        significand compared to \texttt{float}, quantified in Section~\ref{sec:verif}.
+        representable range is $[2^{-250}, 2^{5})$ in line with the maximum proven bounds for the algorithm.
+
+        Magnitudes saturate at $2^5 = 32$. Over the full image, \texttt{mul()} saturates
+        24 times, when it squares a value that has already escaped. This is harmless: the escape
+        test compares against $4.0$, and a saturated result of $32 > 4$ still fails the test, so
+        the iteration terminates exactly as it should. 
   \item \textbf{Saturation and flush-to-zero instead of $\pm\infty$ and NaN.} There is no useful
         reaction to an infinity in this algorithm, and supporting the special encodings would add a
         test to every operation. Exponent overflow therefore returns the largest representable
-        magnitude ($\approx 32$, encoded \texttt{0x7FFFFFFF}) and exponent underflow returns zero.
-        Section~\ref{sec:myflpt-limits} shows why saturating at 32 cannot corrupt the escape test.
+        magnitude ($128$, encoded \texttt{0x7FFFFFFF}) and exponent underflow returns zero.
+        Section~\ref{sec:myflpt-limits} shows why saturating at 128 cannot corrupt the escape test.
 \end{itemize}
 
 \subsection{Arithmetic operations}
 
-All operators live in \texttt{include/myflpt.h} and are declared \texttt{static inline} so that
-they can be inlined into the hot loop, as recommended by the handout; Section~\ref{sec:inlining}
-shows that this requires an explicit nudge to the compiler.
+All operators are implemented in \texttt{include/myflpt.h} and are declared \texttt{static inline} so that
+they can be inlined into the hot loop. 
+Section~\ref{sec:inlining} shows that this requires an explicit compiler flag to force inlining.
 
 \paragraph{\texttt{float\_to\_myflpt()}} converts an IEEE-754 \texttt{float} by re-biasing the
 exponent, since $1.m \cdot 2^{E-127} = 0.1m \cdot 2^{(E+124)-250}$, and by shifting the 24-bit
@@ -266,41 +265,30 @@ needs at most a single normalisation step, selected by one comparison against $2
 ordered by sign alone; same-sign operands are ordered by the unsigned comparison of their
 (exponent, magnitude) fields, with the order reversed for two negative values.
 
-\paragraph{The doubling trick.} Computing $2xy$ deserves a remark. Because the exponent occupies
-the low bits of the word, doubling a value is simply \texttt{xy + 1}. We initially used that form,
-but it is unsafe: when \texttt{mul()} saturates, the exponent field is already \texttt{0xFF} and the
-increment carries into the magnitude and sign fields, producing \texttt{0x80000000}. We therefore
-use \texttt{two\_xy = add(xy, xy)} instead, which saturates correctly. We verified that both forms
-produce a bit-identical image at this zoom level (0 of 262\,144 pixels differ), because the
+\paragraph{Computing $2xy$.} 
+This computation deserves a remark: we first attempted to add 1 to the exponent, as it 
+occupies the lower bits of the word.
+However, it is unsafe: when \texttt{mul()} saturates, the exponent field is already \texttt{0xFF} 
+and the increment carries into the magnitude and sign fields, producing \texttt{0x80000000}. 
+We therefore use \texttt{two\_xy = add(xy, xy)} instead, which saturates correctly. We verified that both forms
+produce a bit-identical image at this zoom level (0 pixels differ), because the
 saturating case only ever occurs on the iteration that escapes; the safe form was kept because the
 property does not survive a change of viewport.
 
 \subsection{Limitations}
 \label{sec:myflpt-limits}
 
-\begin{itemize}\itemsep1pt
-  \item \textbf{One bit less significand than \texttt{float}.} The explicit leading one costs one
-        bit, and all operations truncate rather than round to nearest. Measured worst-case relative
-        error is $2.4\times10^{-7} \approx 2^{-22}$ against $1.2\times10^{-7} = 2^{-23}$ for
-        \texttt{float} (Table~\ref{tab:accuracy}).
-  \item \textbf{Magnitudes saturate at $2^5 = 32$.} Over the full image, \texttt{mul()} saturates
-        24 times, when it squares a value that has already escaped. This is harmless: the escape
-        test compares against $4.0$, and a saturated result of $32 > 4$ still fails the test, so
-        the iteration terminates exactly as it should. A format with a wider exponent range would
-        be required if the escape threshold were ever raised above 32.
-  \item \textbf{No subnormals, infinities or NaNs.} \texttt{float\_to\_myflpt()} maps a subnormal
-        input to zero. This is deliberate (see rationale above) and cannot be reached from our
-        constant inputs.
-\end{itemize}
+We do not implement subnormals, infinities or NaNs. 
+\texttt{float\_to\_myflpt()} maps a subnormal input to zero. 
+This is deliberate and cannot be reached from constant inputs.
 
 % ===========================================================================
 \section{Verification}
 \label{sec:verif}
 % ===========================================================================
 
-Rather than judging the result by eye, both libraries were replayed on the host against an
-IEEE-754 \texttt{double} reference (\texttt{report/verify.c}), using the exact same source headers
-that are compiled for the OR1300. Three properties were checked: the accuracy of the individual operators, the ordering
+We replay both fixed and floating point libraries on our host against the IEEE-754 \texttt{double} reference (\texttt{report/verify.c}), using the exact same source headers that are compiled for the OR1300. 
+We checked three properties: the accuracy of the individual operators, the ordering
 predicate, and the iteration count of every pixel of the final image.
 
 \begin{table}[h]
@@ -323,7 +311,7 @@ IEEE-754 \texttt{float} (for reference) & $1.192 \times 10^{-7}$ & $2^{-23}$ \\
 \end{table}
 
 The bound of $2^{-22}$ for the arithmetic operators is exactly what the format predicts: the result
-magnitude can be as small as $0.5$, so one truncated ulp of $2^{-23}$ represents a relative error
+magnitude can be as small as $0.5$, so one truncated unit of precision $2^{-23}$ represents a relative error
 of up to $2^{-22}$. \texttt{is\_smaller()} was checked exhaustively over all $81$ ordered pairs
 drawn from $\{-8, -4, -1.5, -0.25, 0, 0.25, 1.5, 4, 8\}$ and agrees with the \texttt{double}
 ordering on all of them.
@@ -344,101 +332,32 @@ the same (decoded) coordinates. ``Delta'' is the difference in the returned iter
 \end{table}
 
 Both versions are therefore visually indistinguishable from the reference. The differing pixels all
-lie on the fractal boundary, where the iteration is chaotic and an error of one ulp in the input
-legitimately changes the escape iteration. This is a property of the Mandelbrot set, not a defect
-of the arithmetic. The total work is essentially identical in all three versions
+lie on the fractal boundary, where the iteration is chaotic and an error of one unit of precision in the input
+changes the escape iteration. The total work is essentially identical in all three versions
 ($3\,873\,537$ iterations for \texttt{fxpt}, $3\,873\,492$ for \texttt{myflpt}, $3\,873\,534$ for
-the \texttt{double} reference, a spread of $0.002\,\%$), which makes the performance comparison in
-the next section a fair one: the three programs execute the same algorithm the same number of
-times, and differ only in the cost of one iteration.
-
-Finally, the accumulation \texttt{cx = cx + delta} repeated 512 times was checked for drift. Both
-formats land on exactly $1.0$ with zero error, because $\Delta c = 3 \cdot 2^{-9}$ and the
-coordinates stay below $2$ in magnitude, so every intermediate is exactly representable in both
-formats.
+the \texttt{double} reference, a spread of $0.002\,\%$).
 
 % ===========================================================================
 \section{Performance}
 \label{sec:perf}
 % ===========================================================================
 
-\subsection{Static analysis}
-
-Table~\ref{tab:static} summarises what the compiler produced. The decisive column is the last one:
-the number of helper-routine calls executed per Mandelbrot iteration.
-
-\begin{table}[h]
-\centering\small
-\caption{Static code metrics (\texttt{-Os}, \texttt{TARGET=OR1300}, including the profiling
-read-out code, which is identical in all four programs).}
-\label{tab:static}
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Version} & \textbf{.text [B]} &
-\textbf{\begin{tabular}{@{}c@{}}instr.\ in\\ \texttt{calc\_..\_soft}\end{tabular}} &
-\textbf{\begin{tabular}{@{}c@{}}helper calls\\ per iteration\end{tabular}} \\
-\midrule
-\texttt{fractal\_flpt} (library \texttt{float})      & $24\,820$ & 71  & 9 \\
-\texttt{fractal\_fxpt} (\Q{8}{24})                   & $17\,604$ & 78  & 3 \\
-\texttt{fractal\_myflpt}                             & $18\,236$ & 89  & 8 \\
-\texttt{fractal\_myflpt\_always\_inline}              & $20\,216$ & 560 & 3 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The nine calls of the reference version are $4\times$\texttt{\_\_addsf3},
-$3\times$\texttt{\_\_mulsf3}, $1\times$\texttt{\_\_subsf3} and $1\times$\texttt{\_\_lesf2}; the
-three calls of the fixed-point version are all \texttt{\_\_muldi3}, emitted for the 64-bit
-intermediate product. Over the whole image this amounts to $34.9$~million calls into libgcc for
-\texttt{fractal\_flpt} against $11.6$~million for \texttt{fractal\_fxpt}.
-
-The size of the called routines explains the rest. Table~\ref{tab:helpers} gives the static
-instruction count of each helper, i.e.\ an upper bound on the path actually executed:
-
-\begin{table}[h]
-\centering\small
-\caption{Static size of the helper routines reached from the inner loop.}
-\label{tab:helpers}
-\begin{tabular}{lrlr}
-\toprule
-\textbf{libgcc soft-float} & \textbf{instr.} & \textbf{our libraries} & \textbf{instr.} \\
-\midrule
-\texttt{\_\_addsf3} & 675 & \texttt{myflpt add()}      & 82 \\
-\texttt{\_\_subsf3} & 637 & \texttt{myflpt mul()}      & 63 \\
-\texttt{\_\_mulsf3} & 371 & \texttt{\_\_muldi3}        & 27 \\
-\texttt{\_\_lesf2}  & 105 & & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Measurements on the virtual prototype}
-\label{sec:board}
-
-The four programs were instrumented with the OR1300 profiling module
-(\texttt{support/include/perf.h}). Counters are configured while the module is stopped, started
-immediately before \texttt{draw\_fractal()} and stopped immediately after it, so that neither the
-frame-buffer clear nor the final \texttt{dcache\_flush()} is included. The data-cache flush is
-performed after the measurement window.
+The four programs (float, fxpt, myflpt, myflpt\_always\_inline) were instrumented with the OR1300 profiling module
+(\texttt{support/include/perf.h}). 
 
 \paragraph{Methodology.} Each configuration was measured three times, with a board reset between
-runs so that every run starts from cold caches; re-running without a reset leaves the instruction
-cache warm and makes the second run look artificially fast. We report cycle counts rather than the
-\texttt{hh:mm:ss.mmm} read-out, because \texttt{perf\_cycles\_to\_time()} divides by a CPU
-frequency expressed in kHz and therefore quantises the result to $\pm 1$\,ms.
+runs to start with cold instruction and data caches.
+We report cycle counts rather than the \texttt{hh:mm:ss.mmm}.
 
-The executed-instruction counter is deterministic for a given binary and serves as a cross-check
-that the three runs really performed the same work. The run-time, stall and bus-idle counters do
-vary slightly, because two bus masters are asynchronous to the program: the SDRAM controller issues
-an auto-refresh roughly every $78\,\mu$s irrespective of CPU activity (\texttt{sdram.v}), and the
-graphics controller runs a DMA that re-reads the whole frame buffer once per display frame
-(\texttt{graphicsController.v}). Both loads are \emph{common-mode}, identical in all four binaries,
-so they shift every row of Table~\ref{tab:board} equally and do not distort the comparison. The display DMA in particular puts a floor under bus occupancy that has
-nothing to do with the arithmetic, which is worth keeping in mind when interpreting the bus-idle
-column.
+The executed-instruction counter is deterministic for a given binary. 
+The run-time, stall and bus-idle counters do vary slightly, because two bus masters are asynchronous to the program: the SDRAM controller issues
+an auto-refresh every $\sim 78\,\mu$s irrespective of CPU activity.
+
+Both loads are \emph{common-mode}, identical in all four binaries, so they shift every row of Table~\ref{tab:board} equally and do not distort the comparison. 
 
 \begin{table}[h]
 \centering\small
-\caption{Measured on the Gecko5 board. Median of three runs; raw UART logs in
+\caption{Measured on the Gecko5. Median of three runs; raw UART logs in
 \texttt{report/measurement/}. The derived clock is $5\,971\,036\,224/100.524 = 59.40$\,MHz and is
 identical for all four binaries.}
 \label{tab:board}
@@ -477,36 +396,13 @@ $1-(\text{bus idle}/\text{run time})$.}
 \end{tabular}
 \end{table}
 
-\paragraph{Reproducibility.} Across the three runs of each binary the executed-instruction count,
-the I\$ miss count and the D\$ miss count were \emph{bit-identical}, confirming that every run
-performed exactly the same work. Run times agreed to within $0.0125\,\%$ in the worst case
-(\texttt{fxpt}) and $0.0012\,\%$ for \texttt{flpt}. The only counter with visible scatter is the
-I\$ miss penalty of the three fast binaries ($1\,586$--$8\,002$ cycles): with only 32--112 cold-start
-misses, the total is decided by whether each individual refill happened to collide with a display-DMA
-burst or an SDRAM refresh. At $<0.001\,\%$ of run time that scatter is irrelevant, and we therefore
-do not quote those three values as precise figures. Only the \texttt{flpt} penalty, measured over
-$24.3$~million events, is statistically meaningful.
-
-\paragraph{Two independent confirmations that the counters are trustworthy.} First, the derived
-clock frequency is $59.40$\,MHz for all four binaries, computed from four completely independent
-pairs of numbers. Second, the D-cache miss count is pinned by the frame buffer: it is
-$512\times512\times2 = 524\,288$\,B and the D-cache line is 32\,B (8 words, from the word index
-\texttt{s\_stage2MemoryAddressReg[4:2]} in \texttt{d-cache.v}), which gives exactly $16\,384$
-compulsory misses. The measured values are $16\,389$--$16\,400$, i.e.\ the compulsory misses plus
-5--16 for everything else in the program.
-
-\subsection{The cost of not inlining}
+\subsection{Always Inline}
 \label{sec:inlining}
 
-The handout notes that in-lining the custom operators ``also helps''. Declaring them
-\texttt{static inline} turns out \emph{not} to be sufficient at the project's default optimisation
-level: at \texttt{-Os} gcc keeps out-of-line copies of \texttt{add()} and \texttt{mul()} and calls
-them, so \texttt{fractal\_myflpt} pays five calls to \texttt{add()} and three to \texttt{mul()} per
-iteration, which is $31.0$~million calls over the image, almost as many as the reference version's
-$34.9$~million. We therefore built a second project, \texttt{fractal\_myflpt\_always\_inline}, which
-differs from \texttt{fractal\_myflpt} in exactly six lines: each \texttt{static inline} in
-\texttt{include/myflpt.h} carries an added \texttt{\_\_attribute\_\_((always\_inline))}. The sources,
-makefile and instrumentation are byte-identical, so the comparison isolates the inlining decision.
+Declaring custom operators \texttt{static inline} turns out \emph{not} to be sufficient at the project's default optimisation level: at \texttt{-Os} as gcc keeps out-of-line copies of \texttt{add()} and \texttt{mul()} and calls them. 
+
+We therefore built a \texttt{fractal\_myflpt\_always\_inline}, which
+differs from \texttt{fractal\_myflpt} by placing \texttt{\_\_attribute\_\_((always\_inline))} to function definitions.
 
 \begin{table}[h]
 \centering\small
@@ -530,111 +426,25 @@ Forcing inlining removes all eight library calls, leaving only the three \texttt
 that the 64-bit mantissa product requires, the same number the fixed-point version pays. The
 program runs $1.28\times$ faster.
 
-The instruction count shows precisely where the gain comes from: $526.5 \rightarrow 421.5$
-instructions per iteration, a saving of $104.9$ over the eight eliminated calls, i.e.\
-$\mathbf{13.1}$ \textbf{instructions of call overhead per call}: the \texttt{l.jal}, its delay
-slot, the prologue register saves, the epilogue restores and the \texttt{l.jr}. A second,
-smaller gain is invisible in the instruction count: subtracting executed instructions, stall cycles
-and I\$ penalty from the run time leaves $261.3$~million unattributed cycles for
-\texttt{fractal\_myflpt} and $164.5$~million for the inlined build. The difference, $96.8$~million
-cycles over $31.0$~million eliminated calls, is $\mathbf{3.12}$ \textbf{cycles of branch penalty per
-call}, from the pipeline refills on the call and on the return.
-
-Finally, the trade-off we expected to have to argue about did not materialise. The inlined build is
-$10.9\,\%$ larger, and its I\$ misses do rise from 52 to 112, but that costs $7\,685$ cycles in
-total, under $0.001\,\%$ of run time. Even at $20$\,kiB of text the \emph{hot loop} still fits
-comfortably in the 8\,kiB instruction cache, so on this platform inlining is a pure win. That is a
-conclusion we could only reach by measuring: the course slides show the same trade-off going the
-other way once a program's working set exceeds the cache.
-
 % ===========================================================================
 \section{Discussion}
 \label{sec:discussion}
 % ===========================================================================
 
-\paragraph{Where the speed-up really comes from.} It is tempting to attribute the gain to
-``integer instead of floating point''. The measurements show a more precise, two-part picture.
-All four binaries execute the same algorithm over the same $3.87\times10^{6}$ iterations
-($\pm 0.002\,\%$, Section~\ref{sec:verif}), so every difference lies in the cost of one iteration.
-
-The first part is instruction count: $850.0$ instructions per iteration for the library
-\texttt{float}, against $123.8$ for \Q{8}{24} fixed point, a factor of $6.9$. Table~\ref{tab:helpers}
-shows why: libgcc's \texttt{\_\_addsf3} is 675 instructions of code generalised over cases this
-algorithm never produces, where a \Q{8}{24} addition is one \texttt{l.add}.
-
-The second part is the instruction cache, and it is the larger surprise. The reference version
-misses $24.3$~million times and \emph{waits $1.65$~billion cycles for those refills, $27.6\,\%$ of
-its entire run time}. The fixed-point version misses 32 times. Not 32 thousand: thirty-two,
-which is cold start and nothing else. Its hot loop (\texttt{calc\_mandelbrot\_point\_soft} 78
-instructions, \texttt{\_\_muldi3} 27, \texttt{draw\_fractal} 67) is a few hundred instructions and
-simply lives in the 8\,kiB cache, whereas the soft-float version's working set of four libgcc
-routines totalling nearly 1\,800 instructions plus the caller does not. This is visible in the
-CPI as well: $1.814$ for \texttt{flpt} against $1.097$ for \texttt{fxpt}, a core that is almost never
-waiting. The two effects compose into the measured $11.35\times$.
-
-\paragraph{Fixed point or floating point?} For this viewport the fixed-point version wins on every
-axis: $11.35\times$ against $3.27\times$ for the best custom-float build, a smaller binary, and
+\paragraph{Using Fixed or Floating Point.} For this viewport the fixed-point version wins clearly: $11.35\times$ against $3.27\times$ for the best custom-float build, a smaller binary, and
 marginally better accuracy (Table~\ref{tab:image}), because its $2^{-24}$ absolute resolution is
 finer than \texttt{myflpt}'s $2^{-22}$ relative resolution for values of order one, which is all
-this viewport contains. The custom format nevertheless meets the handout's requirement
-comfortably, at $2.55\times$ faster than the built-in library as written and $3.27\times$ with
-\texttt{always\_inline}, and it earns its place as soon as the dynamic range stops being known in
-advance. With a zoom feature $\Delta c$ shrinks geometrically while the escape bound stays at
-$4.0$; \Q{8}{24} keeps its 24 fractional bits regardless and becomes visibly quantised after
-roughly $2^{20}$ magnification, whereas \texttt{myflpt} redistributes precision automatically. The
-eight integer bits that \Q{8}{24} must reserve for the escape excursion derived
-in~\eqref{eq:bound} are pure overhead at high zoom, which is exactly where a floating-point
-representation pays for itself.
+this viewport contains. 
 
-\paragraph{What is left on the table.} All four binaries still call \texttt{\_\_muldi3} three times
-per iteration to form a 64-bit product from 32-bit operands; the OR1300 has a
-$32\times32\rightarrow32$ multiplier (\texttt{l.mul}) but no widening multiply, so gcc falls back on
-the library routine. Splitting the operands into 16-bit halves by hand, or narrowing the
-\texttt{myflpt} magnitude field to 16 bits so a single \texttt{l.mul} suffices, would remove the
-last call; the second option trades roughly seven bits of significand, which
-Table~\ref{tab:accuracy} suggests the image would survive. We did not implement either.
-
-A second limit is the bus. Even the fixed-point version, which barely touches memory for
-instructions, shows $28.2\,\%$ bus occupancy. Much of that floor is not ours: the graphics
-controller re-reads the whole 512\,kiB frame buffer once per display frame throughout the
-measurement. It is identical in all four binaries and therefore does not distort the comparison,
-but it means the bus-occupancy column should not be read as a property of the arithmetic alone.
-
-\paragraph{Honest limits of the breakdown.} Executed instructions, stall cycles and I\$ penalty do
-not add up to the run time: $7.1\,\%$ of \texttt{fxpt}'s cycles and $9.0\,\%$ of the inlined
-\texttt{myflpt}'s remain unattributed. The controlled inlining experiment identifies branch penalty
-as part of it ($3.12$ cycles per call, Section~\ref{sec:inlining}), and the remainder is loop
-branches, D-cache write stalls and bus contention. We did not enable
-\texttt{PERF\_BRANCH\_PENALTY\_MASK}, so we present this as a partial, not a complete, cycle
-accounting.
+However, with a zoom feature $\Delta c$ shrinks while the escape bound stays at
+$4.0$; \Q{8}{24} keeps its 24 fractional bits regardless and becomes visibly quantised after $2^{20}$ magnification, whereas \texttt{myflpt} redistributes precision automatically. 
 
 % ===========================================================================
 \section{Conclusion}
 % ===========================================================================
 
-Both required implementations are complete, validated and measured on the virtual prototype.
-The fixed-point version uses \Q{8}{24}, a choice justified by deriving a hard bound of $66.25$ on
-the largest intermediate value and confirmed by measuring a maximum of $34.9$ over $3.87$~million
-iterations with zero overflows. The custom floating-point format uses an explicit leading one and
-an excess-250 exponent, deliberately omitting subnormals, infinities, NaNs and round-to-nearest in
-exchange for an \texttt{add()} eight times smaller than libgcc's. Both reproduce the reference
-image to within $0.03\,\%$ of pixels, all on the fractal boundary, and both eliminate every
-soft-float call from the binary.
-
 On the board, the fixed-point version runs $\mathbf{11.35\times}$ faster than the library
 \texttt{float} and the custom floating-point version $\mathbf{2.55\times}$ faster, rising to
-$\mathbf{3.27\times}$ once the operators are genuinely inlined, so the handout's requirement that
-the custom format beat the built-in library is met with margin.
-
-Two findings were only reachable by measuring on the target. The first is that the speed-up is not
-mainly about arithmetic: $6.9\times$ of it comes from executing fewer instructions, but the rest
-comes from the instruction cache, where the reference version spends $27.6\,\%$ of its run time
-waiting for refills after $24.3$~million misses while the fixed-point version misses 32 times in
-total. The second is that \texttt{static inline} does not inline at \texttt{-Os}: the custom library
-was paying eight function calls per iteration, at $13.1$ wasted instructions and $3.12$ cycles of
-branch penalty each, until \texttt{always\_inline} was applied, for $10.9\,\%$ more code and no
-measurable cache cost. Neither of these is visible in the source, and neither could have been
-predicted from first principles; both came out of the profiling counters. That, rather than the
-Mandelbrot set, is what this practical work teaches.
+$\mathbf{3.27\times}$ once the operators are always inlined.
 
 \end{document}
